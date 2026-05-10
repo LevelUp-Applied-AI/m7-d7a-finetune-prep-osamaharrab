@@ -18,11 +18,9 @@ def make_dataset(csv_path: str, test_size: float, seed: int) -> DatasetDict:
 
     Returns a DatasetDict with keys "train" and "test".
     """
-    # TODO: read csv_path with pandas
-    # TODO: convert to a Hugging Face Dataset (preserve_index=False)
-    # TODO: split with the passed test_size and seed
-    # TODO: return the resulting DatasetDict
-    raise NotImplementedError
+    df = pd.read_csv(csv_path)
+    dataset = Dataset.from_pandas(df, preserve_index=False)
+    return dataset.train_test_split(test_size=test_size, seed=seed)
 
 
 def tokenize_dataset(ds_dict: DatasetDict, tokenizer_name: str, max_length: int) -> DatasetDict:
@@ -31,22 +29,30 @@ def tokenize_dataset(ds_dict: DatasetDict, tokenizer_name: str, max_length: int)
 
     Use truncation=True with the passed max_length. Do not pad here.
     """
-    # TODO: load tokenizer with AutoTokenizer.from_pretrained
-    # TODO: define a tokenize_fn that calls the tokenizer with truncation + max_length
-    # TODO: apply ds_dict.map with batched=True
-    # TODO: return the tokenized DatasetDict
-    raise NotImplementedError
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
+    def tokenize_fn(batch):
+        return tokenizer(batch["text"], truncation=True, max_length=max_length)
+
+    return ds_dict.map(tokenize_fn, batched=True)
 
 
 def make_training_args(output_dir: str, lr: float, epochs: int, batch_size: int, seed: int) -> TrainingArguments:
     """Build a TrainingArguments with the standard fine-tuning configuration."""
-    # TODO: return a TrainingArguments configured with the passed arguments.
-    # In addition to wiring the kwargs through, set:
-    #   - eval_strategy="epoch"           (renamed from evaluation_strategy in transformers 4.41+)
-    #   - save_strategy="epoch"
-    #   - logging_steps=50
-    # The course pins transformers>=4.41,<5.0 — use the new argument names.
-    raise NotImplementedError
+    args = TrainingArguments(
+        output_dir=output_dir,
+        learning_rate=lr,
+        num_train_epochs=epochs,
+        per_device_train_batch_size=batch_size,
+        per_device_eval_batch_size=batch_size,
+        seed=seed,
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        logging_steps=50,
+    )
+    args.eval_strategy = getattr(args.eval_strategy, "value", args.eval_strategy)
+    args.save_strategy = getattr(args.save_strategy, "value", args.save_strategy)
+    return args
 
 
 def compute_metrics(eval_pred):
@@ -55,11 +61,12 @@ def compute_metrics(eval_pred):
 
     Use sklearn's accuracy_score and f1_score with average="macro".
     """
-    # TODO: unpack eval_pred to logits, labels
-    # TODO: argmax logits over axis 1
-    # TODO: compute accuracy and macro-F1
-    # TODO: return as a dict
-    raise NotImplementedError
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=1)
+    return {
+        "accuracy": accuracy_score(labels, predictions),
+        "macro_f1": f1_score(labels, predictions, average="macro"),
+    }
 
 
 if __name__ == "__main__":
